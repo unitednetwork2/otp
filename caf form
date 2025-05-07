@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>CAF Form with OTP</title>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; }
+    input, button { display: block; margin: 10px 0; padding: 10px; width: 300px; }
+    #caf-form { display: none; border-top: 1px solid #ccc; padding-top: 20px; margin-top: 20px; }
+  </style>
+</head>
+<body>
+
+  <h2>Mobile OTP Verification</h2>
+  <input type="text" id="phoneNumber" placeholder="+91XXXXXXXXXX" />
+  <div id="recaptcha-container"></div>
+  <button onclick="sendOTP()">Send OTP</button>
+
+  <input type="text" id="otp" placeholder="Enter OTP" />
+  <button onclick="verifyOTP()">Verify OTP</button>
+
+  <div id="caf-form">
+    <h2>CAF Form</h2>
+    <form id="cafForm">
+      <input type="text" name="name" placeholder="Full Name" required />
+      <input type="text" name="location" placeholder="Location" required />
+      <input type="text" name="mobile" placeholder="Mobile Number" required />
+      <button type="submit">Submit CAF</button>
+    </form>
+  </div>
+
+  <script>
+    // Your Firebase Config (already filled)
+    const firebaseConfig = {
+      apiKey: "AIzaSyABHKasy9jkTu-107InesnWTLCfO0npWP1Y",
+      authDomain: "caf-form-otp.firebaseapp.com",
+      projectId: "caf-form-otp",
+      storageBucket: "caf-form-otp.appspot.com",
+      messagingSenderId: "210945164794",
+      appId: "1:210945164794:web:90fcc41f7bbb7d4c0b5043",
+      measurementId: "G-QMT6N1QNEN"
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+
+    // Setup reCAPTCHA
+    window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+      size: 'normal',
+      callback: (response) => {
+        console.log("reCAPTCHA solved");
+      }
+    });
+
+    function sendOTP() {
+      const phoneNumber = document.getElementById('phoneNumber').value;
+      const appVerifier = window.recaptchaVerifier;
+
+      auth.signInWithPhoneNumber(phoneNumber, appVerifier)
+        .then((confirmationResult) => {
+          window.confirmationResult = confirmationResult;
+          alert("OTP sent to " + phoneNumber);
+        })
+        .catch((error) => {
+          alert("Error sending OTP: " + error.message);
+        });
+    }
+
+    function verifyOTP() {
+      const code = document.getElementById('otp').value;
+      window.confirmationResult.confirm(code)
+        .then((result) => {
+          alert("OTP verified!");
+          document.getElementById('caf-form').style.display = "block";
+        })
+        .catch((error) => {
+          alert("Invalid OTP. Try again.");
+        });
+    }
+
+    // Basic submit handling
+    document.getElementById("cafForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      alert("CAF submitted successfully!");
+      // You can send form data to server or Google Sheets here
+    });
+  </script>
+
+</body>
+</html>
