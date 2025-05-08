@@ -1,39 +1,30 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>CAF Form with OTP</title>
-  <!-- Firebase SDK (compat version for better stability) -->
+  <title>Fixed OTP Verification</title>
+  <!-- Firebase SDK (compat version) -->
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
   <style>
     body { font-family: Arial, sans-serif; margin: 40px; }
     input, button { display: block; margin: 10px 0; padding: 10px; width: 300px; }
-    #caf-form { display: none; border-top: 1px solid #ccc; padding-top: 20px; margin-top: 20px; }
-    #recaptcha-container { min-height: 40px; margin: 15px 0; }
+    #recaptcha-container { margin: 15px 0; }
     .error { color: red; margin: 5px 0; font-size: 14px; }
     button:disabled { background-color: #cccccc; cursor: not-allowed; }
-    #otp { margin-top: 20px; }
+    #otp-section { display: none; margin-top: 20px; }
   </style>
 </head>
 <body>
 
   <h2>Mobile OTP Verification</h2>
-  <input type="text" id="phoneNumber" placeholder="+91XXXXXXXXXX" value="+919045839249" />
+  <input type="tel" id="phoneNumber" placeholder="+91XXXXXXXXXX" value="+919045839249" />
   <div id="recaptcha-container"></div>
   <div id="otpError" class="error"></div>
-  <button id="sendOtpBtn" onclick="sendOTP()">Send OTP</button>
+  <button id="sendOtpBtn">Send OTP</button>
 
-  <input type="text" id="otp" placeholder="Enter OTP" disabled />
-  <button id="verifyOtpBtn" onclick="verifyOTP()" disabled>Verify OTP</button>
-
-  <div id="caf-form">
-    <h2>CAF Form</h2>
-    <form id="cafForm">
-      <input type="text" name="name" placeholder="Full Name" required />
-      <input type="text" name="location" placeholder="Location" required />
-      <input type="text" name="mobile" id="verifiedMobile" readonly />
-      <button type="submit">Submit CAF</button>
-    </form>
+  <div id="otp-section">
+    <input type="text" id="otp" placeholder="Enter 6-digit OTP" maxlength="6" />
+    <button id="verifyOtpBtn">Verify OTP</button>
   </div>
 
   <script>
@@ -54,115 +45,135 @@
     let confirmationResult;
     let recaptchaVerifier;
 
+    // DOM Elements
+    const phoneInput = document.getElementById('phoneNumber');
+    const otpError = document.getElementById('otpError');
+    const sendOtpBtn = document.getElementById('sendOtpBtn');
+    const verifyOtpBtn = document.getElementById('verifyOtpBtn');
+    const otpSection = document.getElementById('otp-section');
+    const otpInput = document.getElementById('otp');
+
     // Initialize reCAPTCHA
     function initRecaptcha() {
-      recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
-        size: 'invisible',
-        callback: (response) => {
-          console.log("reCAPTCHA solved automatically");
-          document.getElementById('sendOtpBtn').disabled = false;
-        },
-        'expired-callback': () => {
-          console.log("reCAPTCHA expired - resetting");
-          document.getElementById('otpError').textContent = "Verification expired. Please try again.";
-          document.getElementById('sendOtpBtn').disabled = true;
-          initRecaptcha();
-        }
-      });
-      
-      recaptchaVerifier.render()
-        .then(widgetId => {
-          console.log("reCAPTCHA rendered successfully");
-          window.recaptchaWidgetId = widgetId;
-        })
-        .catch(error => {
-          console.error("reCAPTCHA render error:", error);
-          document.getElementById('otpError').textContent = "Error loading verification. Please refresh the page.";
+      return new Promise((resolve) => {
+        recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+          size: 'normal',
+          callback: () => {
+            console.log("reCAPTCHA solved");
+            sendOtpBtn.disabled = false;
+          },
+          'expired-callback': () => {
+            console.log("reCAPTCHA expired");
+            otpError.textContent = "Verification expired. Click Send OTP again.";
+            sendOtpBtn.disabled = true;
+            initRecaptcha();
+          }
         });
+
+        recaptchaVerifier.render()
+          .then(widgetId => {
+            console.log("reCAPTCHA rendered with widget ID:", widgetId);
+            resolve();
+          })
+          .catch(error => {
+            console.error("reCAPTCHA render error:", error);
+            otpError.textContent = "Error loading verification. Please refresh the page.";
+            setTimeout(initRecaptcha, 2000); // Retry after 2 seconds
+          });
+      });
     }
 
-    // Initialize on page load
-    window.onload = function() {
-      initRecaptcha();
-      document.getElementById('sendOtpBtn').disabled = true;
-    };
-
     // Send OTP function
-    function sendOTP() {
-      const phoneNumber = document.getElementById('phoneNumber').value.trim();
-      const errorElement = document.getElementById('otpError');
+    async function sendOTP() {
+      const phoneNumber = phoneInput.value.trim();
       
       // Validate phone number format
       if (!/^\+91\d{10}$/.test(phoneNumber)) {
-        errorElement.textContent = "Please enter a valid Indian number (+91 followed by 10 digits)";
+        otpError.textContent = "Please enter a valid Indian number (+91 followed by 10 digits)";
         return;
       }
       
-      errorElement.textContent = "Sending OTP...";
-      const sendBtn = document.getElementById('sendOtpBtn');
-      sendBtn.disabled = true;
-      sendBtn.textContent = "Sending...";
+      otpError.textContent = "Sending OTP...";
+      sendOtpBtn.disabled = true;
+      sendOtpBtn.textContent = "Sending...";
 
-      auth.signInWithPhoneNumber(phoneNumber, recaptchaVerifier)
-        .then((result) => {
-          confirmationResult = result;
-          errorElement.textContent = "";
-          sendBtn.textContent = "OTP Sent!";
-          document.getElementById('otp').disabled = false;
-          document.getElementById('verifyOtpBtn').disabled = false;
-          console.log("OTP sent successfully to:", phoneNumber);
-        })
-        .catch((error) => {
-          console.error("OTP send error:", error);
-          errorElement.textContent = "Error: " + error.message.replace("Firebase: ", "");
-          
-          // Reset and re-enable
-          sendBtn.disabled = false;
-          sendBtn.textContent = "Send OTP";
-          initRecaptcha();
-        });
+      try {
+        confirmationResult = await auth.signInWithPhoneNumber(phoneNumber, recaptchaVerifier);
+        otpError.textContent = "";
+        sendOtpBtn.textContent = "OTP Sent!";
+        otpSection.style.display = "block";
+        otpInput.focus();
+        console.log("OTP sent successfully to:", phoneNumber);
+      } catch (error) {
+        console.error("OTP send error:", error);
+        otpError.textContent = getFriendlyErrorMessage(error);
+        sendOtpBtn.disabled = false;
+        sendOtpBtn.textContent = "Send OTP";
+        initRecaptcha(); // Reinitialize on error
+      }
     }
 
     // Verify OTP function
-    function verifyOTP() {
-      const code = document.getElementById('otp').value.trim();
-      const errorElement = document.getElementById('otpError');
+    async function verifyOTP() {
+      const code = otpInput.value.trim();
       
-      if (!code || code.length !== 6 || !/^\d+$/.test(code)) {
-        errorElement.textContent = "Please enter a valid 6-digit OTP";
+      if (!/^\d{6}$/.test(code)) {
+        otpError.textContent = "Please enter a valid 6-digit OTP";
         return;
       }
       
-      errorElement.textContent = "Verifying...";
-      const verifyBtn = document.getElementById('verifyOtpBtn');
-      verifyBtn.disabled = true;
-      verifyBtn.textContent = "Verifying...";
+      otpError.textContent = "Verifying...";
+      verifyOtpBtn.disabled = true;
+      verifyOtpBtn.textContent = "Verifying...";
 
-      confirmationResult.confirm(code)
-        .then((result) => {
-          const user = result.user;
-          console.log("Successfully verified:", user.phoneNumber);
-          document.getElementById('verifiedMobile').value = user.phoneNumber;
-          document.getElementById('caf-form').style.display = "block";
-          errorElement.textContent = "";
-          verifyBtn.textContent = "Verified!";
-        })
-        .catch((error) => {
-          console.error("OTP verification error:", error);
-          errorElement.textContent = "Invalid OTP. Please check and try again.";
-          verifyBtn.disabled = false;
-          verifyBtn.textContent = "Verify OTP";
-        });
+      try {
+        const result = await confirmationResult.confirm(code);
+        console.log("Successfully verified:", result.user.phoneNumber);
+        otpError.textContent = "";
+        verifyOtpBtn.textContent = "Verified!";
+        alert("Phone number verified successfully!");
+        // Proceed with your application flow here
+      } catch (error) {
+        console.error("OTP verification error:", error);
+        otpError.textContent = getFriendlyErrorMessage(error);
+        verifyOtpBtn.disabled = false;
+        verifyOtpBtn.textContent = "Verify OTP";
+      }
     }
 
-    // Form submission handler
-    document.getElementById("cafForm").addEventListener("submit", function(e) {
-      e.preventDefault();
-      const formData = new FormData(e.target);
-      const data = Object.fromEntries(formData.entries());
-      console.log("Form submitted:", data);
-      alert("CAF submitted successfully!\n" + JSON.stringify(data, null, 2));
-      // Here you would typically send data to your backend
+    // Helper function for user-friendly error messages
+    function getFriendlyErrorMessage(error) {
+      switch (error.code) {
+        case 'auth/invalid-phone-number':
+          return "Invalid phone number format";
+        case 'auth/too-many-requests':
+          return "Too many attempts. Please try again later.";
+        case 'auth/code-expired':
+          return "OTP expired. Please request a new one.";
+        case 'auth/invalid-verification-code':
+          return "Invalid OTP code. Please try again.";
+        default:
+          return "Error: " + error.message.replace("Firebase: ", "");
+      }
+    }
+
+    // Event Listeners
+    sendOtpBtn.addEventListener('click', sendOTP);
+    verifyOtpBtn.addEventListener('click', verifyOTP);
+    phoneInput.addEventListener('input', () => {
+      if (phoneInput.value.length > 13) {
+        phoneInput.value = phoneInput.value.slice(0, 13);
+      }
+    });
+    otpInput.addEventListener('input', () => {
+      otpInput.value = otpInput.value.replace(/\D/g, '').slice(0, 6);
+    });
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      initRecaptcha();
+      sendOtpBtn.disabled = true;
+      verifyOtpBtn.disabled = true;
     });
   </script>
 </body>
